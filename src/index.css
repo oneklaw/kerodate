@@ -1,0 +1,66 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-display: 'Outfit', system-ui, -apple-system, sans-serif;
+    --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+  }
+
+  body {
+    font-family: var(--font-sans);
+  }
+
+  h1, h2, h3, .font-display {
+    font-family: var(--font-display);
+  }
+
+  code, pre, .font-mono {
+    font-family: var(--font-mono);
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Custom Range Slider for Top-Up Screen */
+input[type='range'].kora-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 8px;
+  border-radius: 9999px;
+  outline: none;
+}
+
+input[type='range'].kora-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: #e11d48;
+  border: 3px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(225, 29, 72, 0.35);
+  cursor: pointer;
+  transition: transform 120ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.dark input[type='range'].kora-slider::-webkit-slider-thumb {
+  border-color: #18181b;
+}
+
+input[type='range'].kora-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.08);
+}
+
+input[type='range'].kora-slider::-moz-range-thumb {
+  width: 24px;
+  height: 24px;
+  border-radius: 9999px;
+  background: #e11d48;
+  border: 3px solid #ffffff;
+  box-shadow: 0 2px 8px rgba(225, 29, 72, 0.35);
+  cursor: pointer;
+}
