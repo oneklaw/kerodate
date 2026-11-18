@@ -6,7 +6,7 @@ export interface QueuedOfflineMessage {
 }
 
 const QUEUE_KEY = 'kora_offline_queue_v1';
-const SNAPSHOT_KEY = 'kora_cached_snapshot_v1';
+const SNAPSHOT_KEY = 'kero_cached_snapshot_v2';
 
 export function loadOfflineQueue(): QueuedOfflineMessage[] {
   try {

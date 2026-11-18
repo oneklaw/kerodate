@@ -14,6 +14,11 @@ export interface PlatformState {
     email: string;
     city: string;
     lowBalanceThreshold: number;
+    location?: {
+      lat: number;
+      lng: number;
+      label: string;
+    };
   };
   wallet: {
     coinBalance: number;

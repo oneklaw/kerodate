@@ -4,8 +4,21 @@
     "name": "Kenneth",
     "email": "onekalitkenneth@gmail.com",
     "city": "Kampala · London",
-    "lowBalanceThreshold": 15
+    "lowBalanceThreshold": 15,
+    "location": {
+      "lat": 0.3476,
+      "lng": 32.5825,
+      "label": "Kampala Central"
+    }
   },
+  "authAccounts": [
+    {
+      "userId": "usr_kora_01",
+      "email": "onekalitkenneth@gmail.com",
+      "name": "Kenneth",
+      "passwordHash": "c8acc5f3f92f0c7ed74f38e259de8ae1:54f92d1bfaa1518e98c93039509f905fee1f182d31e2321dedb9575acc26a6b98f153d289b515d8da33815740074767cb60d9732b05dc7ee2b2a3d959383aa9f"
+    }
+  ],
   "wallet": {
     "coinBalance": 18,
     "lifetimePurchased": 100,
@@ -26,33 +39,19 @@
       ],
       "imageUrl": "/src/assets/images/profile_amara_1794994398125.jpg",
       "verified": true,
-      "lastActive": "Active 8m ago",
-      "distanceKm": 3,
-      "liked": true
-    },
-    {
-      "id": "prof_julian",
-      "name": "Julian",
-      "age": 31,
-      "city": "London",
-      "occupation": "Curator & Writer",
-      "bio": "Contemporary sculpture curator looking for someone who enjoys long museum afternoons.",
-      "interests": [
-        "Sculpture",
-        "Film",
-        "Cycling"
-      ],
-      "imageUrl": "/src/assets/images/profile_julian_1794994399452.jpg",
-      "verified": true,
-      "lastActive": "Active 14m ago",
-      "distanceKm": 5,
+      "lastActive": "Online now",
+      "lastActiveMinutes": 0,
+      "onlineStatus": "online",
+      "lat": 0.3595,
+      "lng": 32.5935,
+      "distanceKm": 1.8,
       "liked": true
     },
     {
       "id": "prof_nadia",
       "name": "Nadia",
       "age": 28,
-      "city": "Milan",
+      "city": "Kampala",
       "occupation": "Industrial Designer",
       "bio": "Ceramics, espresso on quiet terraces, and weekend train trips to the coast.",
       "interests": [
@@ -62,15 +61,41 @@
       ],
       "imageUrl": "/src/assets/images/profile_nadia_1794994398255.jpg",
       "verified": true,
-      "lastActive": "Active now",
-      "distanceKm": 2,
+      "lastActive": "Online now",
+      "lastActiveMinutes": 0,
+      "onlineStatus": "online",
+      "lat": 0.3321,
+      "lng": 32.6004,
+      "distanceKm": 2.6,
       "liked": false
+    },
+    {
+      "id": "prof_julian",
+      "name": "Julian",
+      "age": 31,
+      "city": "Kampala",
+      "occupation": "Curator & Writer",
+      "bio": "Contemporary sculpture curator looking for someone who enjoys long museum afternoons.",
+      "interests": [
+        "Sculpture",
+        "Film",
+        "Cycling"
+      ],
+      "imageUrl": "/src/assets/images/profile_julian_1794994399452.jpg",
+      "verified": true,
+      "lastActive": "Online now",
+      "lastActiveMinutes": 1,
+      "onlineStatus": "online",
+      "lat": 0.3692,
+      "lng": 32.5512,
+      "distanceKm": 4.2,
+      "liked": true
     },
     {
       "id": "prof_david",
       "name": "David",
       "age": 32,
-      "city": "Nairobi",
+      "city": "Kampala",
       "occupation": "Botanical Photographer",
       "bio": "Documenting urban greenhouses and cooking West African comfort food on Sundays.",
       "interests": [
@@ -80,15 +105,19 @@
       ],
       "imageUrl": "/src/assets/images/profile_david_1794994398521.jpg",
       "verified": true,
-      "lastActive": "Active 25m ago",
-      "distanceKm": 7,
+      "lastActive": "Active 14m ago",
+      "lastActiveMinutes": 14,
+      "onlineStatus": "away",
+      "lat": 0.2951,
+      "lng": 32.6202,
+      "distanceKm": 7.2,
       "liked": false
     },
     {
       "id": "prof_elena",
       "name": "Elena",
       "age": 29,
-      "city": "Copenhagen",
+      "city": "Entebbe",
       "occupation": "Editorial Bookbinder",
       "bio": "Independent bookstores, Scandinavian timber furniture, and quiet evening walks.",
       "interests": [
@@ -98,8 +127,12 @@
       ],
       "imageUrl": "/src/assets/images/profile_elena_1794994399857.jpg",
       "verified": true,
-      "lastActive": "Active 1h ago",
-      "distanceKm": 11,
+      "lastActive": "Active 38m ago",
+      "lastActiveMinutes": 38,
+      "onlineStatus": "away",
+      "lat": 0.2385,
+      "lng": 32.5194,
+      "distanceKm": 14,
       "liked": false
     }
   ],
@@ -109,14 +142,14 @@
       "matchId": "prof_amara",
       "freeMessagesUsed": 2,
       "totalMessagesSent": 2,
-      "updatedAt": "2026-11-18T09:24:54.349Z",
+      "updatedAt": "2026-11-18T10:41:45.388Z",
       "messages": [
         {
           "id": "msg_1",
           "chatId": "chat_amara",
           "sender": "me",
           "text": "Your weekend gallery spot looks peaceful — which exhibition caught your eye?",
-          "createdAt": "2026-11-18T09:18:54.349Z",
+          "createdAt": "2026-11-18T10:35:45.388Z",
           "isFreeMessage": true,
           "coinsCharged": 0,
           "syncStatus": "synced"
@@ -126,7 +159,7 @@
           "chatId": "chat_amara",
           "sender": "match",
           "text": "The East African brutalism retrospective! Are you free for coffee near Kololo this week?",
-          "createdAt": "2026-11-18T09:21:54.349Z",
+          "createdAt": "2026-11-18T10:38:45.388Z",
           "isFreeMessage": false,
           "coinsCharged": 0,
           "syncStatus": "synced"
@@ -136,7 +169,7 @@
           "chatId": "chat_amara",
           "sender": "me",
           "text": "Thursday afternoon works great for me. Same corner roastery?",
-          "createdAt": "2026-11-18T09:24:54.349Z",
+          "createdAt": "2026-11-18T10:41:45.388Z",
           "isFreeMessage": true,
           "coinsCharged": 0,
           "syncStatus": "synced"
@@ -148,14 +181,52 @@
       "matchId": "prof_julian",
       "freeMessagesUsed": 0,
       "totalMessagesSent": 0,
-      "updatedAt": "2026-11-18T08:42:54.349Z",
+      "updatedAt": "2026-11-18T09:59:45.388Z",
       "messages": [
         {
           "id": "msg_4",
           "chatId": "chat_julian",
           "sender": "match",
           "text": "Matched with you after seeing your note on architectural photography. Say hello!",
-          "createdAt": "2026-11-18T08:42:54.349Z",
+          "createdAt": "2026-11-18T09:59:45.388Z",
+          "isFreeMessage": false,
+          "coinsCharged": 0,
+          "syncStatus": "synced"
+        }
+      ]
+    },
+    {
+      "id": "chat_nadia",
+      "matchId": "prof_nadia",
+      "freeMessagesUsed": 0,
+      "totalMessagesSent": 0,
+      "updatedAt": "2026-11-18T10:59:45.464Z",
+      "messages": [
+        {
+          "id": "msg_nearby_prof_nadia_1794999585464",
+          "chatId": "chat_nadia",
+          "sender": "match",
+          "text": "Nearby match (2.6 km SE in Kampala) · Online now. You have 4 free messages to say hello!",
+          "createdAt": "2026-11-18T10:59:45.464Z",
+          "isFreeMessage": false,
+          "coinsCharged": 0,
+          "syncStatus": "synced"
+        }
+      ]
+    },
+    {
+      "id": "chat_david",
+      "matchId": "prof_david",
+      "freeMessagesUsed": 0,
+      "totalMessagesSent": 0,
+      "updatedAt": "2026-11-18T10:59:45.464Z",
+      "messages": [
+        {
+          "id": "msg_nearby_prof_david_1794999585464",
+          "chatId": "chat_david",
+          "sender": "match",
+          "text": "Nearby match (7.2 km SE in Kampala) · Active 14m ago. You have 4 free messages to say hello!",
+          "createdAt": "2026-11-18T10:59:45.464Z",
           "isFreeMessage": false,
           "coinsCharged": 0,
           "syncStatus": "synced"
@@ -174,7 +245,7 @@
       "balanceAfter": 100,
       "status": "completed",
       "description": "Flutterwave Card Top-Up ($1.00 = 100 coins)",
-      "createdAt": "2026-11-18T02:42:54.349Z",
+      "createdAt": "2026-11-18T03:59:45.388Z",
       "webhookVerified": true,
       "phoneOrMaskedAccount": "Visa •••• 4242"
     },
@@ -187,7 +258,7 @@
       "balanceAfter": 18,
       "status": "completed",
       "description": "Previous metered conversations (82 paid messages)",
-      "createdAt": "2026-11-18T07:42:54.349Z"
+      "createdAt": "2026-11-18T08:59:45.388Z"
     }
   ],
   "fraudEvents": [
@@ -206,8 +277,8 @@
         }
       ],
       "samplePayload": "Add me on telegram https://t.me/fast_usdt_promo",
-      "createdAt": "2026-11-18T08:07:54.349Z"
+      "createdAt": "2026-11-18T09:24:45.388Z"
     }
   ],
-  "lastSyncedAt": "2026-11-18T09:42:54.349Z"
+  "lastSyncedAt": "2026-11-18T10:59:45.465Z"
 }

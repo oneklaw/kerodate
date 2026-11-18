@@ -17,7 +17,22 @@ import {
   Profile,
   WalletTransaction,
 } from './src/domain/datingEngine.ts';
+import {
+  calculateHaversineKm,
+  DEFAULT_AUTO_CHAT_RADIUS_KM,
+  GeoPoint,
+  HUB_LOCATIONS,
+  syncNearbyProfilesToConversations,
+} from './src/domain/nearbyLocator.ts';
 import { signWebhookPayload, verifyWebhookSignature } from './src/domain/webhookCrypto.ts';
+import {
+  ChatSessionClaims,
+  hashPassword,
+  signChatSessionToken,
+  validatePasswordStrength,
+  verifyChatSessionToken,
+  verifyPassword,
+} from './src/domain/chatAuth.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -25,7 +40,16 @@ const __dirname = path.dirname(__filename);
 const PORT = Number(process.env.PORT || 3000);
 const FLW_WEBHOOK_SECRET = process.env.FLW_WEBHOOK_SECRET || 'kora_flw_webhook_secret_2026';
 const MOMO_WEBHOOK_SECRET = process.env.MOMO_WEBHOOK_SECRET || 'kora_momo_hmac_secret_2026';
+const CHAT_SESSION_SECRET = process.env.CHAT_SESSION_SECRET || 'kero_chat_session_secret_2026';
+const CHAT_COOKIE_NAME = 'kero_chat_session';
 const DATA_FILE = path.join(__dirname, '.kora-store.json');
+
+interface AuthAccount {
+  userId: string;
+  email: string;
+  name: string;
+  passwordHash: string;
+}
 
 interface PlatformState {
   user: {
@@ -34,6 +58,7 @@ interface PlatformState {
     email: string;
     city: string;
     lowBalanceThreshold: number;
+    location: GeoPoint;
   };
   wallet: {
     coinBalance: number;
@@ -44,6 +69,7 @@ interface PlatformState {
   conversations: Conversation[];
   transactions: WalletTransaction[];
   fraudEvents: FraudEventLog[];
+  authAccounts?: AuthAccount[];
   lastSyncedAt: string;
 }
 
@@ -51,14 +77,23 @@ function createInitialState(): PlatformState {
   const now = Date.now();
   const iso = (offsetMinutes: number) => new Date(now - offsetMinutes * 60_000).toISOString();
 
-  return {
+  const initial: PlatformState = {
     user: {
       id: 'usr_kora_01',
       name: 'Kenneth',
       email: 'onekalitkenneth@gmail.com',
       city: 'Kampala · London',
       lowBalanceThreshold: LOW_BALANCE_THRESHOLD,
+      location: { ...HUB_LOCATIONS.kampala },
     },
+    authAccounts: [
+      {
+        userId: 'usr_kora_01',
+        email: 'onekalitkenneth@gmail.com',
+        name: 'Kenneth',
+        passwordHash: hashPassword('KeroDate!2026'),
+      },
+    ],
     wallet: {
       coinBalance: 18,
       lifetimePurchased: 100,
@@ -75,64 +110,84 @@ function createInitialState(): PlatformState {
         interests: ['Architecture', 'Specialty Coffee', 'Jazz'],
         imageUrl: '/src/assets/images/profile_amara_1794994398125.jpg',
         verified: true,
-        lastActive: 'Active 8m ago',
-        distanceKm: 3,
-        liked: true,
-      },
-      {
-        id: 'prof_julian',
-        name: 'Julian',
-        age: 31,
-        city: 'London',
-        occupation: 'Curator & Writer',
-        bio: 'Contemporary sculpture curator looking for someone who enjoys long museum afternoons.',
-        interests: ['Sculpture', 'Film', 'Cycling'],
-        imageUrl: '/src/assets/images/profile_julian_1794994399452.jpg',
-        verified: true,
-        lastActive: 'Active 14m ago',
-        distanceKm: 5,
+        lastActive: 'Online now',
+        lastActiveMinutes: 0,
+        onlineStatus: 'online',
+        lat: 0.3595,
+        lng: 32.5935,
+        distanceKm: 1.8,
         liked: true,
       },
       {
         id: 'prof_nadia',
         name: 'Nadia',
         age: 28,
-        city: 'Milan',
+        city: 'Kampala',
         occupation: 'Industrial Designer',
         bio: 'Ceramics, espresso on quiet terraces, and weekend train trips to the coast.',
         interests: ['Ceramics', 'Espresso', 'Travel'],
         imageUrl: '/src/assets/images/profile_nadia_1794994398255.jpg',
         verified: true,
-        lastActive: 'Active now',
-        distanceKm: 2,
+        lastActive: 'Online now',
+        lastActiveMinutes: 0,
+        onlineStatus: 'online',
+        lat: 0.3321,
+        lng: 32.6004,
+        distanceKm: 2.6,
         liked: false,
+      },
+      {
+        id: 'prof_julian',
+        name: 'Julian',
+        age: 31,
+        city: 'Kampala',
+        occupation: 'Curator & Writer',
+        bio: 'Contemporary sculpture curator looking for someone who enjoys long museum afternoons.',
+        interests: ['Sculpture', 'Film', 'Cycling'],
+        imageUrl: '/src/assets/images/profile_julian_1794994399452.jpg',
+        verified: true,
+        lastActive: 'Online now',
+        lastActiveMinutes: 1,
+        onlineStatus: 'online',
+        lat: 0.3692,
+        lng: 32.5512,
+        distanceKm: 4.2,
+        liked: true,
       },
       {
         id: 'prof_david',
         name: 'David',
         age: 32,
-        city: 'Nairobi',
+        city: 'Kampala',
         occupation: 'Botanical Photographer',
         bio: 'Documenting urban greenhouses and cooking West African comfort food on Sundays.',
         interests: ['Botany', '35mm Film', 'Cooking'],
         imageUrl: '/src/assets/images/profile_david_1794994398521.jpg',
         verified: true,
-        lastActive: 'Active 25m ago',
-        distanceKm: 7,
+        lastActive: 'Active 14m ago',
+        lastActiveMinutes: 14,
+        onlineStatus: 'away',
+        lat: 0.2951,
+        lng: 32.6202,
+        distanceKm: 7.2,
         liked: false,
       },
       {
         id: 'prof_elena',
         name: 'Elena',
         age: 29,
-        city: 'Copenhagen',
+        city: 'Entebbe',
         occupation: 'Editorial Bookbinder',
         bio: 'Independent bookstores, Scandinavian timber furniture, and quiet evening walks.',
         interests: ['Typography', 'Bookshops', 'Rowing'],
         imageUrl: '/src/assets/images/profile_elena_1794994399857.jpg',
         verified: true,
-        lastActive: 'Active 1h ago',
-        distanceKm: 11,
+        lastActive: 'Active 38m ago',
+        lastActiveMinutes: 38,
+        onlineStatus: 'away',
+        lat: 0.2385,
+        lng: 32.5194,
+        distanceKm: 14.0,
         liked: false,
       },
     ],
@@ -244,13 +299,48 @@ function createInitialState(): PlatformState {
     ],
     lastSyncedAt: new Date().toISOString(),
   };
+
+  const synced = syncNearbyProfilesToConversations(
+    initial.profiles,
+    initial.conversations,
+    initial.user.location,
+    { maxRadiusKm: DEFAULT_AUTO_CHAT_RADIUS_KM, onlineOnly: false },
+  );
+  initial.conversations = synced.conversations;
+  return initial;
 }
 
 function loadState(): PlatformState {
   try {
     if (fs.existsSync(DATA_FILE)) {
       const raw = fs.readFileSync(DATA_FILE, 'utf8');
-      return JSON.parse(raw) as PlatformState;
+      const parsed = JSON.parse(raw) as PlatformState;
+      let dirty = false;
+      if (!Array.isArray(parsed.authAccounts) || parsed.authAccounts.length === 0) {
+        parsed.authAccounts = [
+          {
+            userId: parsed.user?.id || 'usr_kora_01',
+            email: (parsed.user?.email || 'onekalitkenneth@gmail.com').toLowerCase(),
+            name: parsed.user?.name || 'Kenneth',
+            passwordHash: hashPassword('KeroDate!2026'),
+          },
+        ];
+        dirty = true;
+      }
+      const synced = syncNearbyProfilesToConversations(
+        parsed.profiles || [],
+        parsed.conversations || [],
+        parsed.user?.location ?? HUB_LOCATIONS.kampala,
+        { maxRadiusKm: DEFAULT_AUTO_CHAT_RADIUS_KM, onlineOnly: false },
+      );
+      if (synced.addedMatchIds.length > 0) {
+        parsed.conversations = synced.conversations;
+        dirty = true;
+      }
+      if (dirty) {
+        fs.writeFileSync(DATA_FILE, JSON.stringify(parsed, null, 2));
+      }
+      return parsed;
     }
   } catch {
     // Fall back to fresh initial state if file is unreadable
@@ -261,17 +351,77 @@ function loadState(): PlatformState {
 }
 
 let state: PlatformState = loadState();
-const sseClients = new Set<express.Response>();
+const sseClients = new Set<{ res: express.Response; req: express.Request }>();
+const loginFailures = new Map<string, number[]>();
+
+function parseCookies(req: express.Request): Record<string, string> {
+  const header = req.headers.cookie;
+  if (!header) return {};
+  const result: Record<string, string> = {};
+  for (const part of header.split(';')) {
+    const idx = part.indexOf('=');
+    if (idx === -1) continue;
+    const key = part.slice(0, idx).trim();
+    const val = part.slice(idx + 1).trim();
+    if (key) {
+      result[key] = decodeURIComponent(val);
+    }
+  }
+  return result;
+}
+
+function getChatSessionClaims(req: express.Request): ChatSessionClaims | null {
+  const authHeader = req.header('authorization');
+  if (authHeader?.startsWith('Bearer ')) {
+    const token = authHeader.slice(7).trim();
+    const claims = verifyChatSessionToken(token, CHAT_SESSION_SECRET);
+    if (claims) return claims;
+  }
+  const cookies = parseCookies(req);
+  return verifyChatSessionToken(cookies[CHAT_COOKIE_NAME], CHAT_SESSION_SECRET);
+}
+
+function setChatSessionCookie(res: express.Response, token: string) {
+  res.setHeader(
+    'Set-Cookie',
+    `${CHAT_COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=43200`,
+  );
+}
+
+function clearChatSessionCookie(res: express.Response) {
+  res.setHeader(
+    'Set-Cookie',
+    `${CHAT_COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0`,
+  );
+}
+
+function serializeClientState(authenticated: boolean) {
+  const { authAccounts: _omit, ...publicState } = state;
+  if (authenticated) {
+    return publicState;
+  }
+  return {
+    ...publicState,
+    conversations: publicState.conversations.map((conv) => ({
+      ...conv,
+      messages: [],
+    })),
+  };
+}
 
 function persistState() {
   state.lastSyncedAt = new Date().toISOString();
   fs.writeFileSync(DATA_FILE, JSON.stringify(state, null, 2));
 }
 
-function broadcastEvent(event: string, data: unknown) {
-  const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const res of sseClients) {
-    res.write(payload);
+function broadcastEvent(
+  event: string,
+  buildPayload: (authenticated: boolean) => Record<string, unknown>,
+) {
+  for (const client of sseClients) {
+    const authed = Boolean(getChatSessionClaims(client.req));
+    const data = buildPayload(authed);
+    client.res.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   }
 }
 
@@ -322,7 +472,12 @@ function scheduleMatchReply(chatId: string, matchId: string) {
     conv.messages.push(reply);
     conv.updatedAt = reply.createdAt;
     persistState();
-    broadcastEvent('message_received', { chatId, message: reply, state });
+    broadcastEvent('message_received', (authed) => ({
+      authenticated: authed,
+      chatId,
+      message: authed ? reply : undefined,
+      state: serializeClientState(authed),
+    }));
   }, 900);
 }
 
@@ -335,7 +490,7 @@ function processMessageSend(chatId: string, text: string, clientTempId?: string)
   if (clientTempId && conv.messages.some((m) => m.clientTempId === clientTempId)) {
     return {
       status: 200,
-      body: { deduplicated: true, state },
+      body: { deduplicated: true, state: serializeClientState(true) },
     };
   }
 
@@ -373,13 +528,16 @@ function processMessageSend(chatId: string, text: string, clientTempId?: string)
     state.fraudEvents.unshift(fraudEntry);
     state.fraudEvents = state.fraudEvents.slice(0, 30);
     persistState();
-    broadcastEvent('fraud_triggered', { fraudEntry, state });
+    broadcastEvent('fraud_triggered', (authed) => ({
+      fraudEntry,
+      state: serializeClientState(authed),
+    }));
     return {
       status: 422,
       body: {
         error: spamCheck.triggeredRules[0]?.message || 'Blocked by anti-spam protection.',
         fraudEvaluation: spamCheck,
-        state,
+        state: serializeClientState(true),
       },
     };
   }
@@ -391,7 +549,7 @@ function processMessageSend(chatId: string, text: string, clientTempId?: string)
       body: {
         error: charge.reason || 'Insufficient coins.',
         charge,
-        state,
+        state: serializeClientState(true),
       },
     };
   }
@@ -432,11 +590,12 @@ function processMessageSend(chatId: string, text: string, clientTempId?: string)
   conv.updatedAt = newMsg.createdAt;
   persistState();
 
-  broadcastEvent('balance_updated', {
+  broadcastEvent('balance_updated', (authed) => ({
+    authenticated: authed,
     coinBalance: state.wallet.coinBalance,
     lowBalanceAlert: charge.lowBalanceAlert,
-    state,
-  });
+    state: serializeClientState(authed),
+  }));
 
   scheduleMatchReply(conv.id, conv.matchId);
 
@@ -445,7 +604,7 @@ function processMessageSend(chatId: string, text: string, clientTempId?: string)
     body: {
       message: newMsg,
       charge,
-      state,
+      state: serializeClientState(true),
     },
   };
 }
@@ -482,7 +641,10 @@ function processVerifiedWebhook(
     };
     state.fraudEvents.unshift(fraudEntry);
     persistState();
-    broadcastEvent('fraud_triggered', { fraudEntry, state });
+    broadcastEvent('fraud_triggered', (authed) => ({
+      fraudEntry,
+      state: serializeClientState(authed),
+    }));
     return { status: 401, body: { error: 'Invalid webhook signature.' } };
   }
 
@@ -492,7 +654,7 @@ function processVerifiedWebhook(
   }
 
   if (tx.status === 'completed') {
-    return { status: 200, body: { idempotent: true, tx, state } };
+    return { status: 200, body: { idempotent: true, tx, state: serializeClientState(false) } };
   }
 
   state.wallet.coinBalance += tx.coinsDelta;
@@ -502,21 +664,22 @@ function processVerifiedWebhook(
   tx.webhookVerified = true;
   persistState();
 
-  broadcastEvent('balance_updated', {
+  broadcastEvent('balance_updated', (authed) => ({
+    authenticated: authed,
     coinBalance: state.wallet.coinBalance,
     lowBalanceAlert: state.wallet.coinBalance <= LOW_BALANCE_THRESHOLD,
     creditedCoins: tx.coinsDelta,
     reference: tx.reference,
     provider,
-    state,
-  });
+    state: serializeClientState(authed),
+  }));
 
   return {
     status: 200,
     body: {
       credited: true,
       tx,
-      state,
+      state: serializeClientState(false),
     },
   };
 }
@@ -573,8 +736,150 @@ async function startServer() {
     }),
   );
 
-  app.get('/api/bootstrap', (_req, res) => {
-    res.json(state);
+  app.get('/api/auth/session', (req, res) => {
+    const claims = getChatSessionClaims(req);
+    if (!claims) {
+      res.json({ authenticated: false });
+      return;
+    }
+    const account = state.authAccounts?.find((a) => a.userId === claims.userId);
+    res.json({
+      authenticated: true,
+      user: {
+        id: claims.userId,
+        email: claims.email,
+        name: account?.name || state.user.name,
+      },
+      expiresAt: new Date(claims.exp).toISOString(),
+    });
+  });
+
+  app.post('/api/auth/login', (req, res) => {
+    const { email, password } = req.body as { email?: string; password?: string };
+    const normalizedEmail = (email || '').trim().toLowerCase();
+    if (!normalizedEmail || !password) {
+      res.status(400).json({ error: 'Email and password are required.' });
+      return;
+    }
+
+    const nowMs = Date.now();
+    const recentFailures = (loginFailures.get(normalizedEmail) || []).filter(
+      (ts) => nowMs - ts <= 60_000,
+    );
+    if (recentFailures.length >= 5) {
+      res.status(429).json({
+        error: 'Too many failed login attempts. Please wait 60 seconds and try again.',
+      });
+      return;
+    }
+
+    const account = state.authAccounts?.find(
+      (a) => a.email.toLowerCase() === normalizedEmail,
+    );
+    if (!account || !verifyPassword(password, account.passwordHash)) {
+      recentFailures.push(nowMs);
+      loginFailures.set(normalizedEmail, recentFailures);
+      res.status(401).json({ error: 'Invalid email or password.' });
+      return;
+    }
+
+    loginFailures.delete(normalizedEmail);
+    state.user.email = account.email;
+    state.user.name = account.name;
+    const syncedLogin = syncNearbyProfilesToConversations(
+      state.profiles,
+      state.conversations,
+      state.user.location ?? HUB_LOCATIONS.kampala,
+      { maxRadiusKm: DEFAULT_AUTO_CHAT_RADIUS_KM, onlineOnly: false },
+    );
+    state.conversations = syncedLogin.conversations;
+    persistState();
+
+    const token = signChatSessionToken(
+      { userId: account.userId, email: account.email },
+      CHAT_SESSION_SECRET,
+    );
+    setChatSessionCookie(res, token);
+    res.json({
+      authenticated: true,
+      user: { id: account.userId, email: account.email, name: account.name },
+      state: serializeClientState(true),
+    });
+  });
+
+  app.post('/api/auth/register', (req, res) => {
+    const { name, email, password } = req.body as {
+      name?: string;
+      email?: string;
+      password?: string;
+    };
+    const trimmedName = (name || '').trim();
+    const normalizedEmail = (email || '').trim().toLowerCase();
+
+    if (trimmedName.length < 2) {
+      res.status(400).json({ error: 'Name must be at least 2 characters.' });
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      res.status(400).json({ error: 'Enter a valid email address.' });
+      return;
+    }
+    const strength = validatePasswordStrength(password || '');
+    if (!strength.valid) {
+      res.status(400).json({ error: strength.error });
+      return;
+    }
+
+    const exists = state.authAccounts?.some(
+      (a) => a.email.toLowerCase() === normalizedEmail,
+    );
+    if (exists) {
+      res.status(409).json({ error: 'An account with this email already exists. Sign in instead.' });
+      return;
+    }
+
+    const newAccount: AuthAccount = {
+      userId: `usr_${Date.now().toString(36)}`,
+      email: normalizedEmail,
+      name: trimmedName,
+      passwordHash: hashPassword(password!),
+    };
+    state.authAccounts = [...(state.authAccounts || []), newAccount];
+    state.user.id = newAccount.userId;
+    state.user.email = newAccount.email;
+    state.user.name = newAccount.name;
+    const syncedReg = syncNearbyProfilesToConversations(
+      state.profiles,
+      state.conversations,
+      state.user.location ?? HUB_LOCATIONS.kampala,
+      { maxRadiusKm: DEFAULT_AUTO_CHAT_RADIUS_KM, onlineOnly: false },
+    );
+    state.conversations = syncedReg.conversations;
+    persistState();
+
+    const token = signChatSessionToken(
+      { userId: newAccount.userId, email: newAccount.email },
+      CHAT_SESSION_SECRET,
+    );
+    setChatSessionCookie(res, token);
+    res.status(201).json({
+      authenticated: true,
+      user: { id: newAccount.userId, email: newAccount.email, name: newAccount.name },
+      state: serializeClientState(true),
+    });
+  });
+
+  app.post('/api/auth/logout', (_req, res) => {
+    clearChatSessionCookie(res);
+    res.json({
+      authenticated: false,
+      state: serializeClientState(false),
+    });
+  });
+
+  app.get('/api/bootstrap', (req, res) => {
+    const authenticated = Boolean(getChatSessionClaims(req));
+    res.json(serializeClientState(authenticated));
   });
 
   app.get('/api/events', (req, res) => {
@@ -583,9 +888,10 @@ async function startServer() {
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
     res.write(`event: connected\ndata: ${JSON.stringify({ ok: true })}\n\n`);
-    sseClients.add(res);
+    const client = { res, req };
+    sseClients.add(client);
     req.on('close', () => {
-      sseClients.delete(res);
+      sseClients.delete(client);
     });
   });
 
@@ -597,10 +903,99 @@ async function startServer() {
     }
     profile.liked = !profile.liked;
     persistState();
-    res.json({ profile, state });
+    res.json({ profile, state: serializeClientState(Boolean(getChatSessionClaims(req))) });
+  });
+
+  app.post('/api/location/update', (req, res) => {
+    const { lat, lng, label } = req.body as {
+      lat?: number;
+      lng?: number;
+      label?: string;
+    };
+    const nextLat = Number(lat);
+    const nextLng = Number(lng);
+    if (!Number.isFinite(nextLat) || !Number.isFinite(nextLng)) {
+      res.status(400).json({ error: 'Valid latitude and longitude are required.' });
+      return;
+    }
+
+    const prevOrigin = state.user.location ?? HUB_LOCATIONS.kampala;
+    const dLat = nextLat - prevOrigin.lat;
+    const dLng = nextLng - prevOrigin.lng;
+    const nextOrigin: GeoPoint = {
+      lat: nextLat,
+      lng: nextLng,
+      label: label?.trim() || 'Live GPS Position',
+    };
+
+    // Preserve realistic local distances when switching city hubs or GPS origin
+    const movedFar = calculateHaversineKm(prevOrigin, nextOrigin) > 50;
+    state.profiles = state.profiles.map((p) => {
+      const updatedLat = movedFar ? Number((p.lat + dLat).toFixed(4)) : p.lat;
+      const updatedLng = movedFar ? Number((p.lng + dLng).toFixed(4)) : p.lng;
+      const distanceKm = calculateHaversineKm(nextOrigin, {
+        lat: updatedLat,
+        lng: updatedLng,
+      });
+      return {
+        ...p,
+        lat: updatedLat,
+        lng: updatedLng,
+        distanceKm,
+        city: movedFar && label ? label.split(' ')[0] : p.city,
+      };
+    });
+
+    state.user.location = nextOrigin;
+    state.user.city = nextOrigin.label;
+    const syncedLoc = syncNearbyProfilesToConversations(
+      state.profiles,
+      state.conversations,
+      nextOrigin,
+      { maxRadiusKm: DEFAULT_AUTO_CHAT_RADIUS_KM, onlineOnly: false },
+    );
+    state.conversations = syncedLoc.conversations;
+    persistState();
+    res.json({
+      origin: nextOrigin,
+      addedNearbyCount: syncedLoc.addedMatchIds.length,
+      state: serializeClientState(Boolean(getChatSessionClaims(req))),
+    });
+  });
+
+  app.post('/api/chats/sync-nearby', (req, res) => {
+    if (!getChatSessionClaims(req)) {
+      res.status(401).json({ error: 'Secure chat login required.' });
+      return;
+    }
+    const { radiusKm, onlineOnly } = req.body as {
+      radiusKm?: number | null;
+      onlineOnly?: boolean;
+    };
+    const safeRadius =
+      radiusKm === null ? null : Number.isFinite(Number(radiusKm)) ? Number(radiusKm) : DEFAULT_AUTO_CHAT_RADIUS_KM;
+    const origin = state.user.location ?? HUB_LOCATIONS.kampala;
+    const synced = syncNearbyProfilesToConversations(state.profiles, state.conversations, origin, {
+      maxRadiusKm: safeRadius,
+      onlineOnly: Boolean(onlineOnly),
+    });
+    state.conversations = synced.conversations;
+    if (synced.addedMatchIds.length > 0) {
+      persistState();
+    }
+    res.json({
+      addedCount: synced.addedMatchIds.length,
+      addedMatchIds: synced.addedMatchIds,
+      nearbyCount: synced.nearbyMatchIds.length,
+      state: serializeClientState(true),
+    });
   });
 
   app.post('/api/chats/start', (req, res) => {
+    if (!getChatSessionClaims(req)) {
+      res.status(401).json({ error: 'Secure chat login required.' });
+      return;
+    }
     const { matchId } = req.body as { matchId?: string };
     const profile = state.profiles.find((p) => p.id === matchId);
     if (!profile) {
@@ -632,10 +1027,14 @@ async function startServer() {
       state.conversations.unshift(conv);
       persistState();
     }
-    res.json({ conversation: conv, state });
+    res.json({ conversation: conv, state: serializeClientState(true) });
   });
 
   app.post('/api/chats/:chatId/messages', (req, res) => {
+    if (!getChatSessionClaims(req)) {
+      res.status(401).json({ error: 'Secure chat login required.' });
+      return;
+    }
     const { text, clientTempId } = req.body as { text?: string; clientTempId?: string };
     const result = processMessageSend(req.params.chatId, text ?? '', clientTempId);
     res.status(result.status).json(result.body);
@@ -688,7 +1087,7 @@ async function startServer() {
       res.status(429).json({
         error: fraudEval.triggeredRules[0]?.message || 'Top-up flagged by fraud rules.',
         fraudEval,
-        state,
+        state: serializeClientState(Boolean(getChatSessionClaims(req))),
       });
       return;
     }
@@ -723,7 +1122,7 @@ async function startServer() {
       transaction: tx,
       webhookEndpoint:
         provider === 'flutterwave' ? '/api/webhooks/flutterwave' : '/api/webhooks/mtn-momo',
-      state,
+      state: serializeClientState(Boolean(getChatSessionClaims(req))),
     });
   });
 
@@ -801,6 +1200,7 @@ async function startServer() {
 
     res.status(result.status).json({
       ...result.body,
+      state: serializeClientState(Boolean(getChatSessionClaims(req))),
       signedPayloadPreview: payloadObj,
       signaturePreview: `${signature.slice(0, 18)}...`,
     });
@@ -833,10 +1233,14 @@ async function startServer() {
     state.fraudEvents.unshift(log);
     state.fraudEvents = state.fraudEvents.slice(0, 30);
     persistState();
-    res.json({ evaluation, log, state });
+    res.json({ evaluation, log, state: serializeClientState(Boolean(getChatSessionClaims(req))) });
   });
 
   app.post('/api/sync', (req, res) => {
+    if (!getChatSessionClaims(req)) {
+      res.status(401).json({ error: 'Secure chat login required.' });
+      return;
+    }
     const { messages } = req.body as {
       messages?: Array<{ clientTempId: string; chatId: string; text: string }>;
     };
@@ -854,7 +1258,11 @@ async function startServer() {
       });
     }
 
-    res.json({ syncedCount: results.filter((r) => r.status < 300).length, results, state });
+    res.json({
+      syncedCount: results.filter((r) => r.status < 300).length,
+      results,
+      state: serializeClientState(true),
+    });
   });
 
   app.post('/api/backup/restore', (req, res) => {
@@ -877,23 +1285,23 @@ async function startServer() {
       fraudEvents: Array.isArray(incoming.fraudEvents) ? incoming.fraudEvents : state.fraudEvents,
     };
     persistState();
-    broadcastEvent('balance_updated', {
+    broadcastEvent('balance_updated', (authed) => ({
       coinBalance: state.wallet.coinBalance,
       lowBalanceAlert: state.wallet.coinBalance <= LOW_BALANCE_THRESHOLD,
-      state,
-    });
-    res.json({ restored: true, state });
+      state: serializeClientState(authed),
+    }));
+    res.json({ restored: true, state: serializeClientState(Boolean(getChatSessionClaims(req))) });
   });
 
-  app.post('/api/reset-demo', (_req, res) => {
+  app.post('/api/reset-demo', (req, res) => {
     state = createInitialState();
     persistState();
-    broadcastEvent('balance_updated', {
+    broadcastEvent('balance_updated', (authed) => ({
       coinBalance: state.wallet.coinBalance,
       lowBalanceAlert: false,
-      state,
-    });
-    res.json(state);
+      state: serializeClientState(authed),
+    }));
+    res.json(serializeClientState(Boolean(getChatSessionClaims(req))));
   });
 
   app.get('/api/blueprints', (_req, res) => {

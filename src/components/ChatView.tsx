@@ -1,5 +1,5 @@
 import { FormEvent, useEffect, useRef, useState } from 'react';
-import { AlertTriangle, ArrowRight, Lock, Send, WifiOff } from 'lucide-react';
+import { AlertTriangle, ArrowRight, Compass, Lock, Send, WifiOff } from 'lucide-react';
 import {
   Conversation,
   FREE_MESSAGES_PER_CHAT,
@@ -13,9 +13,12 @@ interface ChatViewProps {
   coinBalance: number;
   isOffline: boolean;
   queuedCount: number;
+  authEmail?: string;
   onSelectChat: (chatId: string) => void;
   onSendMessage: (chatId: string, text: string) => Promise<{ ok: boolean; error?: string; code?: number }>;
   onNavigateTopUp: () => void;
+  onLockChats: () => void;
+  onSyncNearbyChats?: (radiusKm: number | null, onlineOnly: boolean) => Promise<void>;
 }
 
 export function ChatView({
@@ -25,10 +28,15 @@ export function ChatView({
   coinBalance,
   isOffline,
   queuedCount,
+  authEmail,
   onSelectChat,
   onSendMessage,
   onNavigateTopUp,
+  onLockChats,
+  onSyncNearbyChats,
 }: ChatViewProps) {
+  const [nearbyRadius, setNearbyRadius] = useState<number | null>(10);
+  const [syncingNearby, setSyncingNearby] = useState(false);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [feedbackError, setFeedbackError] = useState<string | null>(null);
@@ -77,17 +85,72 @@ export function ChatView({
   return (
     <section aria-label="Messages" className="grid grid-cols-1 lg:grid-cols-12 gap-6 min-h-[620px]">
       <aside className="lg:col-span-4 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-2xl overflow-hidden flex flex-col">
-        <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
-          <div>
+        <div className="px-5 py-4 border-b border-zinc-200 dark:border-zinc-800 flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <h1 className="text-lg font-bold text-zinc-900 dark:text-zinc-50">Conversations</h1>
             <p className="text-xs text-zinc-500 dark:text-zinc-400">
               {conversations.length} active · 4 free messages per new chat
             </p>
+            {authEmail && (
+              <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 truncate mt-0.5">
+                Signed in as {authEmail}
+              </p>
+            )}
           </div>
-          <span className="text-xs font-mono tabular-nums font-semibold text-zinc-700 dark:text-zinc-300">
-            {coinBalance} coins
-          </span>
+          <div className="flex flex-col items-end gap-1.5 shrink-0">
+            <span className="text-xs font-mono tabular-nums font-semibold text-zinc-700 dark:text-zinc-300">
+              {coinBalance} coins
+            </span>
+            <button
+              type="button"
+              onClick={onLockChats}
+              data-testid="lock-chats-btn"
+              className="min-h-[30px] px-2.5 rounded-lg border border-zinc-200 dark:border-zinc-700 text-[11px] font-medium text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-800 flex items-center gap-1 whitespace-nowrap"
+            >
+              <Lock className="w-3 h-3" aria-hidden="true" />
+              Lock Chats
+            </button>
+          </div>
         </div>
+
+        {onSyncNearbyChats && (
+          <div className="px-5 py-2.5 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50/70 dark:bg-zinc-950/50 flex items-center justify-between gap-2">
+            <span className="text-[11px] font-medium text-zinc-600 dark:text-zinc-400 flex items-center gap-1.5">
+              <Compass className="w-3.5 h-3.5 text-rose-600 dark:text-rose-400 shrink-0" aria-hidden="true" />
+              Auto-bring nearby:
+            </span>
+            <div className="flex items-center gap-1">
+              {[
+                { label: '5km', value: 5 },
+                { label: '10km', value: 10 },
+                { label: '25km', value: 25 },
+                { label: 'All', value: null },
+              ].map((opt) => (
+                <button
+                  key={opt.label}
+                  type="button"
+                  disabled={syncingNearby}
+                  onClick={async () => {
+                    setNearbyRadius(opt.value);
+                    setSyncingNearby(true);
+                    try {
+                      await onSyncNearbyChats(opt.value, false);
+                    } finally {
+                      setSyncingNearby(false);
+                    }
+                  }}
+                  className={`px-2 py-1 rounded-md text-[11px] font-mono tabular-nums font-medium transition-colors ${
+                    nearbyRadius === opt.value
+                      ? 'bg-rose-600 text-white'
+                      : 'text-zinc-600 dark:text-zinc-400 hover:bg-zinc-200/70 dark:hover:bg-zinc-800'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         <div className="divide-y divide-zinc-100 dark:divide-zinc-800 overflow-y-auto flex-1">
           {conversations.length === 0 ? (
@@ -131,6 +194,11 @@ export function ChatView({
                         {freeLeft > 0 ? `${freeLeft}/4 free` : '1 coin/msg'}
                       </span>
                     </div>
+                    {match && (
+                      <p className="text-[11px] font-mono text-zinc-500 dark:text-zinc-400 truncate">
+                        {match.distanceKm} km · {match.onlineStatus === 'online' ? 'Online Now' : 'Recently Online'}
+                      </p>
+                    )}
                     <p className="text-xs text-zinc-600 dark:text-zinc-400 truncate mt-1">
                       {lastMsg ? lastMsg.text : 'Start the conversation'}
                     </p>
@@ -158,7 +226,7 @@ export function ChatView({
                     {selectedProfile.name}, {selectedProfile.age}
                   </h2>
                   <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {selectedProfile.city} · {selectedProfile.occupation}
+                    {selectedProfile.city} · {selectedProfile.distanceKm} km · {selectedProfile.occupation}
                   </p>
                 </div>
               </div>

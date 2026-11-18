@@ -22,6 +22,7 @@ import {
 import { NavTab, PlatformState } from './types/app';
 import { DiscoverView } from './components/DiscoverView';
 import { ChatView } from './components/ChatView';
+import { ChatLoginView } from './components/ChatLoginView';
 import { WalletTopUpView } from './components/WalletTopUpView';
 import { SecurityTrustView } from './components/SecurityTrustView';
 import { BlueprintDocsView } from './components/BlueprintDocsView';
@@ -75,6 +76,12 @@ export default function App() {
     getBiometricEnrollment(),
   );
   const [isLocked, setIsLocked] = useState<boolean>(false);
+  const [chatSession, setChatSession] = useState<{
+    authenticated: boolean;
+    email?: string;
+    name?: string;
+  }>({ authenticated: false });
+  const [pendingChatMatchId, setPendingChatMatchId] = useState<string | null>(null);
   const [toast, setToast] = useState<{
     id: string;
     title: string;
@@ -84,6 +91,10 @@ export default function App() {
 
   const syncChannelRef = useRef<BroadcastChannel | null>(null);
   const lastAlertedLowRef = useRef<boolean>(false);
+  const hasStateRef = useRef<boolean>(Boolean(state));
+  hasStateRef.current = Boolean(state);
+  const chatSessionAuthRef = useRef<boolean>(chatSession.authenticated);
+  chatSessionAuthRef.current = chatSession.authenticated;
 
   const isOffline = simulatedOffline || !browserOnline;
 
@@ -116,6 +127,28 @@ export default function App() {
     }
   }, []);
 
+  const fetchChatSession = useCallback(async () => {
+    try {
+      const res = await fetch('/api/auth/session');
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        authenticated?: boolean;
+        user?: { email: string; name: string };
+      };
+      if (data.authenticated && data.user) {
+        setChatSession({
+          authenticated: true,
+          email: data.user.email,
+          name: data.user.name,
+        });
+      } else {
+        setChatSession({ authenticated: false });
+      }
+    } catch {
+      // Offline: retain current session state
+    }
+  }, []);
+
   const fetchBootstrap = useCallback(async () => {
     try {
       const res = await fetch('/api/bootstrap');
@@ -124,17 +157,18 @@ export default function App() {
       applyNewState(data, false);
       setErrorMsg(null);
     } catch (err) {
-      if (!state) {
+      if (!hasStateRef.current) {
         setErrorMsg(err instanceof Error ? err.message : 'Unable to reach server.');
       }
     } finally {
       setLoading(false);
     }
-  }, [applyNewState, state]);
+  }, [applyNewState]);
 
   useEffect(() => {
+    fetchChatSession();
     fetchBootstrap();
-  }, [fetchBootstrap]);
+  }, [fetchBootstrap, fetchChatSession]);
 
   // Real-time SSE + Cross-tab BroadcastChannel sync
   useEffect(() => {
@@ -148,11 +182,14 @@ export default function App() {
     es.addEventListener('balance_updated', (ev) => {
       try {
         const data = JSON.parse((ev as MessageEvent).data) as {
+          authenticated?: boolean;
           state?: PlatformState;
           creditedCoins?: number;
           reference?: string;
         };
-        if (data.state) {
+        if (data.authenticated === false && chatSessionAuthRef.current) {
+          fetchBootstrap();
+        } else if (data.state) {
           applyNewState(data.state, false);
         }
         if (data.creditedCoins) {
@@ -173,9 +210,12 @@ export default function App() {
     es.addEventListener('message_received', (ev) => {
       try {
         const data = JSON.parse((ev as MessageEvent).data) as {
+          authenticated?: boolean;
           state?: PlatformState;
         };
-        if (data.state) {
+        if (data.authenticated === false && chatSessionAuthRef.current) {
+          fetchBootstrap();
+        } else if (data.state) {
           applyNewState(data.state, false);
         }
       } catch {
@@ -187,7 +227,7 @@ export default function App() {
       es.close();
       syncChannelRef.current?.close();
     };
-  }, [applyNewState, fetchBootstrap]);
+  }, [applyNewState, fetchBootstrap, chatSession.authenticated]);
 
   // Browser online/offline events
   useEffect(() => {
@@ -214,6 +254,10 @@ export default function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ messages: currentQueue }),
       });
+      if (res.status === 401) {
+        setChatSession({ authenticated: false });
+        return;
+      }
       if (res.ok) {
         const data = (await res.json()) as {
           syncedCount: number;
@@ -248,12 +292,75 @@ export default function App() {
     }
   };
 
+  const handleUpdateLocation = async (lat: number, lng: number, label: string) => {
+    const res = await fetch('/api/location/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ lat, lng, label }),
+    });
+    if (res.ok) {
+      const data = (await res.json()) as {
+        addedNearbyCount?: number;
+        state: PlatformState;
+      };
+      applyNewState(data.state);
+      if (data.addedNearbyCount && data.addedNearbyCount > 0) {
+        setToast({
+          id: String(Date.now()),
+          title: 'Nearby Matches Synced',
+          body: `${data.addedNearbyCount} nearby member(s) automatically added to Chats.`,
+          tone: 'success',
+        });
+      }
+    }
+  };
+
+  const handleSyncNearbyChats = async (radiusKm: number | null, onlineOnly: boolean) => {
+    if (!chatSession.authenticated) return;
+    const res = await fetch('/api/chats/sync-nearby', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ radiusKm, onlineOnly }),
+    });
+    if (res.status === 401) {
+      setChatSession({ authenticated: false });
+      return;
+    }
+    if (res.ok) {
+      const data = (await res.json()) as {
+        addedCount: number;
+        state: PlatformState;
+      };
+      applyNewState(data.state);
+      if (data.addedCount > 0) {
+        setToast({
+          id: String(Date.now()),
+          title: 'Nearby People Added to Chat',
+          body: `${data.addedCount} nearby member(s) synced to your Conversations with 4 free messages.`,
+          tone: 'success',
+        });
+      }
+    }
+  };
+
   const handleStartChat = async (profileId: string) => {
+    if (!chatSession.authenticated) {
+      setPendingChatMatchId(profileId);
+      setActiveTab('messages');
+      return;
+    }
+
     const res = await fetch('/api/chats/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ matchId: profileId }),
     });
+    if (res.status === 401) {
+      setChatSession({ authenticated: false });
+      setPendingChatMatchId(profileId);
+      setActiveTab('messages');
+      return;
+    }
     if (res.ok) {
       const data = (await res.json()) as {
         conversation: { id: string };
@@ -263,6 +370,50 @@ export default function App() {
       setActiveChatId(data.conversation.id);
       setActiveTab('messages');
     }
+  };
+
+  const handleChatAuthenticated = async (
+    user: { id: string; email: string; name: string },
+    nextState: PlatformState,
+  ) => {
+    setChatSession({ authenticated: true, email: user.email, name: user.name });
+    applyNewState(nextState, false);
+    const matchToOpen = pendingChatMatchId;
+    setPendingChatMatchId(null);
+
+    if (matchToOpen) {
+      const res = await fetch('/api/chats/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ matchId: matchToOpen }),
+      });
+      if (res.ok) {
+        const data = (await res.json()) as {
+          conversation: { id: string };
+          state: PlatformState;
+        };
+        applyNewState(data.state);
+        setActiveChatId(data.conversation.id);
+      }
+    }
+  };
+
+  const handleLockChats = async () => {
+    const res = await fetch('/api/auth/logout', { method: 'POST' });
+    setChatSession({ authenticated: false });
+    setActiveChatId(null);
+    if (res.ok) {
+      const data = (await res.json()) as { state?: PlatformState };
+      if (data.state) {
+        applyNewState(data.state, false);
+      }
+    }
+    setToast({
+      id: String(Date.now()),
+      title: 'Chats Locked',
+      body: 'Private chat session closed. Sign in again to read or send messages.',
+      tone: 'info',
+    });
   };
 
   const handleSendMessage = async (
@@ -317,6 +468,10 @@ export default function App() {
     });
 
     const data = await res.json();
+    if (res.status === 401) {
+      setChatSession({ authenticated: false });
+      return { ok: false, error: data.error || 'Please sign in to send messages.', code: 401 };
+    }
     if (data.state) {
       applyNewState(data.state);
     }
@@ -485,10 +640,10 @@ export default function App() {
   const isLowBalance = (state?.wallet.coinBalance ?? 100) <= LOW_BALANCE_THRESHOLD;
 
   return (
-    <div className="min-h-screen bg-zinc-50 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 pb-20 md:pb-12">
+    <div className="min-h-screen bg-zinc-100/70 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 pb-20 md:pb-8">
       {/* Desktop 3-Zone Top Bar Contract */}
-      <header className="hidden md:block sticky top-0 z-30 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
-        <div className="max-w-7xl mx-auto px-6 h-16 flex items-center justify-between gap-8">
+      <header className="hidden md:block sticky top-0 z-30 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800">
+        <div className="max-w-7xl mx-auto px-5 h-14 flex items-center justify-between gap-8">
           {/* Zone 1: Single wordmark */}
           <a
             href="#discover"
@@ -496,9 +651,9 @@ export default function App() {
               e.preventDefault();
               setActiveTab('discover');
             }}
-            className="text-xl font-display font-bold tracking-tight text-zinc-900 dark:text-zinc-50 whitespace-nowrap shrink-0"
+            className="text-lg font-display font-bold tracking-tight text-zinc-900 dark:text-zinc-50 whitespace-nowrap shrink-0"
           >
-            Kora
+            KERO-DATE
           </a>
 
           {/* Zone 2: 5 concise single-line nav links */}
@@ -510,7 +665,7 @@ export default function App() {
                   key={item.id}
                   type="button"
                   onClick={() => setActiveTab(item.id)}
-                  className={`py-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 ${
+                  className={`py-1.5 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 ${
                     active
                       ? 'border-rose-600 text-zinc-900 dark:text-zinc-50'
                       : 'border-transparent text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100'
@@ -527,7 +682,7 @@ export default function App() {
             <button
               type="button"
               onClick={() => setActiveTab('wallet')}
-              className="min-h-[40px] px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold font-mono tabular-nums transition-colors whitespace-nowrap shrink-0"
+              className="min-h-[38px] px-4 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold font-mono tabular-nums transition-colors whitespace-nowrap shrink-0"
             >
               Top Up · {state?.wallet.coinBalance ?? 0} coins
             </button>
@@ -536,22 +691,22 @@ export default function App() {
       </header>
 
       {/* Mobile Top Bar (<= 52px) */}
-      <div className="md:hidden sticky top-0 z-30 h-13 px-4 bg-white/90 dark:bg-zinc-950/90 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
-        <span className="text-lg font-display font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-          Kora
+      <div className="md:hidden sticky top-0 z-30 h-12 px-4 bg-white/95 dark:bg-zinc-950/95 backdrop-blur-md border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between">
+        <span className="text-base font-display font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
+          KERO-DATE
         </span>
         <button
           type="button"
           onClick={() => setActiveTab('wallet')}
-          className="min-h-[36px] px-3 rounded-lg bg-rose-600 text-white text-xs font-mono tabular-nums font-semibold"
+          className="min-h-[34px] px-3 rounded-lg bg-rose-600 text-white text-xs font-mono tabular-nums font-semibold"
         >
           {state?.wallet.coinBalance ?? 0} coins
         </button>
       </div>
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+      <main className="max-w-7xl mx-auto px-4 sm:px-5 py-3.5 space-y-4">
         {/* Workspace Utility Toolbar (Theme, Offline/Sync, Biometric Lock, Reset) */}
-        <div className="flex flex-wrap items-center justify-between gap-3 py-2.5 px-4 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs">
+        <div className="flex flex-wrap items-center justify-between gap-2.5 py-2 px-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 text-xs">
           <div className="flex items-center gap-3 text-zinc-600 dark:text-zinc-400">
             <span className="font-medium text-zinc-900 dark:text-zinc-100">
               {state?.user.name ?? 'Member'} · {state?.user.city ?? 'Global'}
@@ -692,24 +847,40 @@ export default function App() {
               <DiscoverView
                 profiles={state.profiles}
                 conversations={state.conversations}
+                origin={state.user.location}
+                onUpdateLocation={handleUpdateLocation}
                 onToggleLike={handleToggleLike}
                 onStartChat={handleStartChat}
+                onSyncNearbyChats={handleSyncNearbyChats}
               />
             )}
 
-            {activeTab === 'messages' && (
-              <ChatView
-                profiles={state.profiles}
-                conversations={state.conversations}
-                activeChatId={activeChatId}
-                coinBalance={state.wallet.coinBalance}
-                isOffline={isOffline}
-                queuedCount={offlineQueue.length}
-                onSelectChat={setActiveChatId}
-                onSendMessage={handleSendMessage}
-                onNavigateTopUp={() => setActiveTab('wallet')}
-              />
-            )}
+            {activeTab === 'messages' &&
+              (chatSession.authenticated ? (
+                <ChatView
+                  profiles={state.profiles}
+                  conversations={state.conversations}
+                  activeChatId={activeChatId}
+                  coinBalance={state.wallet.coinBalance}
+                  isOffline={isOffline}
+                  queuedCount={offlineQueue.length}
+                  authEmail={chatSession.email}
+                  onSelectChat={setActiveChatId}
+                  onSendMessage={handleSendMessage}
+                  onNavigateTopUp={() => setActiveTab('wallet')}
+                  onLockChats={handleLockChats}
+                  onSyncNearbyChats={handleSyncNearbyChats}
+                />
+              ) : (
+                <ChatLoginView
+                  pendingMatchName={
+                    pendingChatMatchId
+                      ? state.profiles.find((p) => p.id === pendingChatMatchId)?.name
+                      : undefined
+                  }
+                  onAuthenticated={handleChatAuthenticated}
+                />
+              ))}
 
             {activeTab === 'wallet' && (
               <WalletTopUpView

@@ -8,6 +8,8 @@ export type PaymentProvider = 'flutterwave' | 'mtn_momo';
 export type TransactionStatus = 'pending' | 'completed' | 'failed' | 'flagged';
 export type TransactionType = 'top_up' | 'message_spend' | 'free_grant' | 'refund';
 
+export type OnlineStatus = 'online' | 'away' | 'offline';
+
 export interface Profile {
   id: string;
   name: string;
@@ -19,6 +21,10 @@ export interface Profile {
   imageUrl: string;
   verified: boolean;
   lastActive: string;
+  lastActiveMinutes: number;
+  onlineStatus: OnlineStatus;
+  lat: number;
+  lng: number;
   distanceKm: number;
   liked?: boolean;
 }

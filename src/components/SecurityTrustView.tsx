@@ -130,15 +130,15 @@ export function SecurityTrustView({
   };
 
   return (
-    <section aria-label="Security, Sync and Anti-Spam Rules" className="space-y-8">
-      <div className="border-b border-zinc-200 dark:border-zinc-800 pb-6">
+    <section aria-label="Security, Sync and Anti-Spam Rules" className="space-y-5">
+      <div className="border-b border-zinc-200 dark:border-zinc-800 pb-4">
         <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
           Security, Continuity &amp; Risk Engine
         </p>
-        <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 mt-1">
+        <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 mt-0.5">
           Trust, Biometrics &amp; Fraud Rules
         </h1>
-        <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1.5">
+        <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 mt-1">
           Protect your wallet with WebAuthn biometric lock, export AES-256-GCM encrypted backups, sync offline queues, and inspect anti-spam rules.
         </p>
       </div>

@@ -54,16 +54,16 @@ export function BlueprintDocsView() {
   };
 
   return (
-    <section aria-label="Laravel PHP, React Native and Deployment Blueprint" className="space-y-6">
-      <div className="flex flex-col md:flex-row md:items-end justify-between gap-4 border-b border-zinc-200 dark:border-zinc-800 pb-6">
+    <section aria-label="Laravel PHP, React Native and Deployment Blueprint" className="space-y-5">
+      <div className="flex flex-col md:flex-row md:items-end justify-between gap-3 border-b border-zinc-200 dark:border-zinc-800 pb-4">
         <div>
           <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
             Production Source Tree &amp; Runbooks
           </p>
-          <h1 className="text-3xl sm:text-4xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 mt-1">
+          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50 mt-0.5">
             Laravel PHP, React Native &amp; Docs
           </h1>
-          <p className="text-sm text-zinc-600 dark:text-zinc-400 mt-1.5">
+          <p className="text-xs sm:text-sm text-zinc-600 dark:text-zinc-400 mt-1">
             Inspect, copy, or download the full Laravel migrations, Eloquent models, Blade + Tailwind top-up view, Flutterwave/MTN MoMo webhook handlers, React Native screens, and deployment guide.
           </p>
         </div>
